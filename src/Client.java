@@ -9,6 +9,9 @@ import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.Scanner;
 
+/**
+ * UDP file transfer client.
+ */
 public class Client {
 	
 	private final int WINDOW_SIZE = 5;
@@ -29,13 +32,12 @@ public class Client {
 	private InetAddress serverAddress;
 	
 	private DatagramSocket clientSocket;
-	
-	public Client() throws IOException {
 
-	    // Prompt the user for inputs until valid inputs are given
-		promptUser();
+	public void startClient() throws IOException{
+        // Prompt the user for inputs until valid inputs are given
+        promptUser();
 
-		// Initializing the client socket
+        // Initializing the client socket
         try {
             clientSocket = new DatagramSocket(clientPort);
             clientSocket.setSoTimeout(TIMEOUT);
@@ -45,15 +47,19 @@ public class Client {
             message += "\nIs there another instance of this client?";
             throw new SocketException(message);
         }
-		
-		if (!establishConnection()) return;
-		
-		if (!requestFile()) return;
-		
-		acceptFile();
-	}
 
-	private void promptUser() {
+        // If something bad happened during connection establishment
+        if (!establishConnection()) return;
+
+        if (!requestFile()) return;
+
+        acceptFile();
+    }
+
+    /**
+     * Prompt user until all inputs are valid
+     */
+    private void promptUser() {
 		Scanner scan = new Scanner(System.in);
 		
 		System.out.print("Please specify a client port number: ");
@@ -85,7 +91,12 @@ public class Client {
 			promptUser();
 		}
 	}
-	
+
+    /**
+     * Setup connection with server and get valid list of files
+     * @return True if everything went okay
+     * @throws IOException
+     */
 	private boolean establishConnection() throws IOException {
 		String message = "Attempting to connect to server at: ";
 		message += serverAddress.getHostAddress();
@@ -102,7 +113,7 @@ public class Client {
 		
 		DatagramPacket packet = null;
 		
-		/* Waiting for SYN ACK */
+		// Waiting for SYN ACK
 		for (int i = 1; i <= attempts; i++) {
 			
 			send(sendHeader);
@@ -161,7 +172,12 @@ public class Client {
 		
 		return true;
 	}
-	
+
+    /**
+     *
+     * @return
+     * @throws IOException
+     */
 	private boolean requestFile() throws IOException {
 		Scanner scan = new Scanner(System.in);
 		
@@ -178,13 +194,11 @@ public class Client {
 		int reqPackLen = headData.length + fileName.length();
 		
 		byte[] packData = new byte[reqPackLen];
-		
-		/* Populate REQ data array with header data */
-		for (int i = 0; i < headData.length; i++) {
-			packData[i] = headData[i];
-		}
-		
-		/* Populate ACK data array with requested file */
+
+		// Populate REQ data array with header data
+        System.arraycopy(headData, 0, packData, 0, headData.length);
+
+		// Populate ACK data array with requested file
 		for (int i = 0; i < fileName.length(); i++) {
 			packData[i + headData.length] = (byte) fileName.charAt(i);
 		}
@@ -195,7 +209,7 @@ public class Client {
 		
 		DatagramPacket reqAckPack = null;
 		
-		/* Waiting for REQ ACK */
+		// Waiting for REQ ACK
 		for (int i = 1; i <= attempts; i++) {
 			
 			send(packData);
@@ -234,19 +248,19 @@ public class Client {
 		
 		int statusCode = (int) reqAckData[Header.HEADER_SIZE] & 0xFF;
 		
-		/* Checks for non "good" status */
+		// Checks for non "good" status
 		if (statusCode != (1 << 7)) {
 			String msg = "Server does not recognize requested file";
 			System.err.println(msg);
 			return false;
 		}
 		
-		numPackets = (int) ((reqAckData[Header.HEADER_SIZE + 1] & 0xFF) << 24 |
+		numPackets = ((reqAckData[Header.HEADER_SIZE + 1] & 0xFF) << 24 |
 				(reqAckData[Header.HEADER_SIZE + 2] & 0xFF) << 16 |
 				(reqAckData[Header.HEADER_SIZE + 3] & 0xFF) << 8 |
 				(reqAckData[Header.HEADER_SIZE + 4] & 0xFF));
 		
-		fileSize = (int) ((reqAckData[Header.HEADER_SIZE + 5] & 0xFF) << 24 |
+		fileSize = ((reqAckData[Header.HEADER_SIZE + 5] & 0xFF) << 24 |
 				(reqAckData[Header.HEADER_SIZE + 6] & 0xFF) << 16 |
 				(reqAckData[Header.HEADER_SIZE + 7] & 0xFF) << 8 |
 				(reqAckData[Header.HEADER_SIZE + 8] & 0xFF));
@@ -258,15 +272,19 @@ public class Client {
 		return true;
 		
 	}
-	
+
+    /**
+     * Start creating file based on data received from server.
+     * @throws IOException
+     */
 	private void acceptFile() throws IOException {
-		int lastReceived = 0;
+		int lastReceivedSeq = 0;
 		int bytesReceived = 0;
 		
 		int attempted = 0;
 		final int attempts = 3;
 		
-		final String path = System.getProperty("user.dir") + "/" + fileName;
+		final String path = "./" + fileName;
 		
 		File file = new File(path);
 		
@@ -278,14 +296,14 @@ public class Client {
 		
 		FileOutputStream fos = new FileOutputStream(path, true);
 		
-		while (lastReceived != numPackets) {
-			int recvd = lastReceived;
+		while (lastReceivedSeq != numPackets) {
+			int currentReceivedSeq = lastReceivedSeq;
 			
 			for (int i = 0; i < WINDOW_SIZE; i++) {
-				DatagramPacket recvPack = null;
+				DatagramPacket receivedPacket;
 
 				try {
-					recvPack = receive();
+					receivedPacket = receive();
 				} catch (SocketTimeoutException e) {
 					break;
 				} catch (ChecksumException bc) {
@@ -294,22 +312,22 @@ public class Client {
 					continue;
 				}
 				
-				Header head = new Header(recvPack.getData());
+				Header head = new Header(receivedPacket.getData());
 				int seqNum = head.getSequenceNum();
 
-				if (seqNum != lastReceived + 1) {
+				if (seqNum != lastReceivedSeq + 1) {
 					String msg = "Got unexpected packet. Sequence number: ";
 					msg += seqNum;
 					System.err.println(msg);
 					continue;
 				}
 				
-				lastReceived = seqNum;
+				lastReceivedSeq = seqNum;
 				
-				byte[] bytes = recvPack.getData();
+				byte[] bytes = receivedPacket.getData();
 				int hSize = Header.HEADER_SIZE;
 				
-				if (lastReceived == numPackets) {
+				if (lastReceivedSeq == numPackets) {
 					byte[] temp = new byte[fileSize - bytesReceived + hSize];
 
 					System.arraycopy(bytes, 0, temp, 0, temp.length);
@@ -324,14 +342,13 @@ public class Client {
 				double percentage = (((double) bytesReceived) /
 						((double) fileSize)) * 100;
 				
-				String msg = String.format("%s %d \t%4.2f%%",
-						"- Received packet number", lastReceived, percentage);
+				String msg = String.format("%s %d \t%4.2f%%", "Received packet number", lastReceivedSeq, percentage);
 				System.out.println(msg);
 				
-				if (lastReceived == numPackets) break;				
+				if (lastReceivedSeq == numPackets) break;
 			}
 			
-			if (recvd == lastReceived) {
+			if (currentReceivedSeq == lastReceivedSeq) {
 				attempted ++;
 			} else {
 				attempted = 0;
@@ -344,50 +361,62 @@ public class Client {
 			
 			Header ackPack = new Header();
 			ackPack.setAckFlag(true);
-			ackPack.setSequenceNum(lastReceived);
+			ackPack.setSequenceNum(lastReceivedSeq);
 			ackPack.setChecksum();
 			
 			send(ackPack.getBytes());
 			System.out.println("Sending acknowledgement of packet "
-					+ lastReceived + "\n");
+					+ lastReceivedSeq + "\n");
 		}
 		
 		System.out.println("File transfer complete.");
 		
 		fos.close();
 	}
-	
+
+    /**
+     * Sends given data to server.
+     * @param data Byte array of data to send
+     * @throws IOException
+     */
 	private void send(byte[] data) throws IOException {
 		DatagramPacket sendPacket = new DatagramPacket(data, data.length,
 				serverAddress, serverPort);
 		
 		clientSocket.send(sendPacket);
 	}
-	
+
+    /**
+     * Receives data from the server
+     * @return The packet received from server
+     * @throws IOException
+     * @throws ChecksumException If checksum had an error in it
+     */
 	private DatagramPacket receive() throws IOException, ChecksumException
 	{
 				
-		byte[] recvData = new byte[1024];
+		byte[] receivedData = new byte[1024];
 		
-		DatagramPacket recvPacket = 
-				new DatagramPacket(recvData,recvData.length);
+		DatagramPacket receivedPacket = new DatagramPacket(receivedData,receivedData.length);
 		
-		clientSocket.receive(recvPacket);
+		clientSocket.receive(receivedPacket);
 
-		int expected = Header.calculateChecksum(recvData);
-		int received = new Header(recvData).getChecksum();
+		int expected = Header.calculateChecksum(receivedData);
+		int received = new Header(receivedData).getChecksum();
 		
 		if (expected != received)
 			throw new ChecksumException(expected, received);
 		
-		return recvPacket;
+		return receivedPacket;
 	}
 	
 	public static void main(String[] args) {
-		try {
-			new Client();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+
+	    Client client = new Client();
+	    try {
+	        client.startClient();
+        } catch(IOException ex) {
+	        ex.printStackTrace();
+        }
 	}
 }

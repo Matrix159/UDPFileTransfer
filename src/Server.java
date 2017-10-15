@@ -10,6 +10,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Scanner;
 
+/**
+ * UDP server for file transfer
+ */
 public class Server {
 	 
 	private final int MAX_PACKET_SIZE = 1024;
@@ -38,7 +41,10 @@ public class Server {
 		promptUser();
 		initializeServer();
 	}
-	
+
+	/**
+	 * This will continuously prompt the user for a port number until valid.
+	 */
 	private void promptUser() {
 		Scanner scan = new Scanner(System.in);
 		System.out.print("Please specify a port number: ");
@@ -52,24 +58,30 @@ public class Server {
 		}
 		scan.close();
 	}
-	
+
+	/**
+	 * Sets up the server socket to make sure it isn't using an in-use port.
+	 * @throws SocketException If an error occurs setting up the socket
+	 */
 	private void initializeServer() throws SocketException {
 		try {
 			serverSocket = new DatagramSocket(serverPort);
 			serverSocket.setSoTimeout(TIMEOUT);
 		} catch (SocketException e) {
-			String message = "Problem hosting server on port ";
+			String message = "Error occurred hosting server on port ";
 			message += serverPort;
 			message += "\nIs there another instance of this server?";
 			throw new SocketException(message);
 		}
-		
-		String msg = "Server started on port " + serverPort;
-		System.out.println(msg);
+
+		System.out.println("Server started on port " + serverPort);
 	}
-	
-	private void getAvailFiles() {
-		File folder = new File(PATH);		
+
+    /**
+     * Check for available files in a given path.
+     */
+	private void getAvailFiles(final String path) {
+		File folder = new File(path);
 		File[] fileArray = folder.listFiles();
 		
 		files = "";
@@ -83,7 +95,13 @@ public class Server {
 			}
 		}
 	}
-	
+
+    /**
+     * Method used to receive packets off the server socket.
+     * @return The received DatagramPacket
+     * @throws SocketTimeoutException For all socket exceptions
+     * @throws ChecksumException If the checksum had an error in it
+     */
 	private DatagramPacket receive() throws SocketTimeoutException,
 			ChecksumException
 	{
@@ -94,7 +112,7 @@ public class Server {
 		try {
 			serverSocket.receive(packet);
 		} catch (SocketTimeoutException se) {
-			throw se;
+			return null;
 		} catch (IOException e) {
 			System.err.println(e.getMessage());
 			return null;
@@ -103,27 +121,30 @@ public class Server {
 		int expected = Header.calculateChecksum(buf);
 		int received = new Header(buf).getChecksum();
 		
-		if (expected != received)
-			throw new ChecksumException(expected, received);
-		
+		if (expected != received) {
+            throw new ChecksumException(expected, received);
+        }
+
 		return packet;
 	}
-	
+
+    /**
+     * Establishes connection with client and gets the received file name.
+     */
 	private void establishConnection() {
-		DatagramPacket recvPacket = null;
+		DatagramPacket receivedPacket = null;
 		
 		do {
 			try {
-				recvPacket = receive();
+				receivedPacket = receive();
 			} catch (SocketTimeoutException e) {
-				continue;
+			    e.printStackTrace();
 			} catch (ChecksumException bc) {
 				System.err.println(bc.getMessage());
-				continue;
 			}
-		} while (recvPacket == null);
+		} while (receivedPacket == null);
 				
-		byte[] data = recvPacket.getData();
+		byte[] data = receivedPacket.getData();
 		Header head = new Header(data);
 		
 		/* If received non SYN packet, retry */
@@ -133,13 +154,13 @@ public class Server {
 			establishConnection();
 		}
 		
-		clientAddr = recvPacket.getAddress();
-		clientPort = recvPacket.getPort();
+		clientAddr = receivedPacket.getAddress();
+		clientPort = receivedPacket.getPort();
 		
 		System.out.println("Received SYN packet from " + 
 				clientAddr.getHostAddress() + " " + " on port " + clientPort);
 		
-		getAvailFiles();
+		getAvailFiles(PATH);
 		
 		Header ackHead = new Header();
 		ackHead.setAckFlag(true);
@@ -151,11 +172,9 @@ public class Server {
 		int ackPackLen = headData.length + files.length();
 		
 		byte[] packData = new byte[ackPackLen];
-		
-		/* Populate ACK data array with header data */
-		for (int i = 0; i < headData.length; i++) {
-			packData[i] = headData[i];
-		}
+
+		// Populate ACK data array with header data
+		System.arraycopy(headData, 0, packData, 0, headData.length);
 		
 		/* Populate ACK data array with list of files */
 		for (int i = 0; i < files.length(); i++) {
@@ -177,13 +196,13 @@ public class Server {
 			try {
 				reqPack = receive();
 				
-				Header recvHead = new Header(recvPacket.getData());
+				Header receivedHeader = new Header(receivedPacket.getData());
 				
 				/* Check for proper header */
-				if (!recvHead.getReqFlag() || recvHead.getAckFlag() || 
-						recvHead.getSynFlag()) {
+				if (!receivedHeader.getReqFlag() || receivedHeader.getAckFlag() ||
+						receivedHeader.getSynFlag()) {
 					System.err.println("Received unexpected packet");
-					recvHead = null;
+					receivedHeader = null;
 					continue;
 				}
 				
@@ -214,8 +233,7 @@ public class Server {
 		return Files.readAllBytes(p);
 	}
 	
-	private boolean sendFile(byte[] fileData, int numPackets)
-			throws IOException {
+	private boolean sendFile(byte[] fileData, int numPackets) throws IOException {
 		int lastAck = 0;
 
 		int numRetry = 0;
@@ -235,29 +253,26 @@ public class Server {
 				Header head = new Header();
 				head.setSequenceNum(x + 1);
 
-				// TODO: Checksum junk
-
 				final int maxData = MAX_PACKET_SIZE - Header.HEADER_SIZE;
 				int leftToSend = fileData.length - (maxData) * x;
-				int packSize = leftToSend;
+				int packetSize = leftToSend;
 
-				if (packSize > maxData) 
-					packSize = maxData;
+				if (packetSize > maxData) {
+                    packetSize = maxData;
+                }
 
-				packSize += Header.HEADER_SIZE;
+				packetSize += Header.HEADER_SIZE;
 
-				byte[] packetData = new byte[packSize];
+				byte[] packetData = new byte[packetSize];
 
 				/* Populate packet byte array */
-				for (int k = Header.HEADER_SIZE; k < packSize; k++) {
-					packetData[k] = 
-							fileData[(x * maxData) + (k - Header.HEADER_SIZE)];
+				for (int k = Header.HEADER_SIZE; k < packetSize; k++) {
+					packetData[k] = fileData[(x * maxData) + (k - Header.HEADER_SIZE)];
 				}
 
 				head.setChecksum(packetData);
 
-				System.arraycopy(head.getBytes(), 0, packetData, 0, 
-						Header.HEADER_SIZE);
+				System.arraycopy(head.getBytes(), 0, packetData, 0, Header.HEADER_SIZE);
 
 				try {
 					send(packetData);
@@ -299,7 +314,7 @@ public class Server {
 			Header head = new Header(ackPacket.getData());
 			lastAck = head.getSequenceNum();
 			
-			System.out.println(" -Got acknowledgement of packet " +
+			System.out.println(" Got acknowledgement of packet " +
 					lastAck + "\n");
 		}
 		
@@ -307,13 +322,12 @@ public class Server {
 	}
 	
 
-	/****************************************************************
-	 * Sends the given data to the most recent connected client on 
-	 * the port the server is hosted on.
+	/**
+	 * Sends the given data to the most recent connected client on the port the server is hosted on.
 	 * 
-	 * @param data
+	 * @param data Data to send
 	 * @throws IOException
-	 ***************************************************************/
+	 */
 	private void send(byte[] data) throws IOException {
 		DatagramPacket sendPacket = new DatagramPacket(data, 
 				data.length, clientAddr, clientPort);

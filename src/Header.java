@@ -105,8 +105,7 @@ public class Header {
 		return data;
 	}
 	
-	public static byte[] createStatusPacket(boolean good, int numPackets, 
-			int numBytes) {
+	public static byte[] createStatusPacket(boolean good, int numPackets, int numBytes) {
 		
 		Header head = new Header();
 		head.setAckFlag(true);
@@ -127,17 +126,17 @@ public class Header {
 		
 		head.setChecksum(dataField);
 		
-		byte[] toReturn = new byte[HEADER_SIZE + dataLen];
+		byte[] returnedStatusPacket = new byte[HEADER_SIZE + dataLen];
 		
 		for (int i = 0; i < HEADER_SIZE; i++) {
-			toReturn[i] = head.getBytes()[i];
+			returnedStatusPacket[i] = head.getBytes()[i];
 		}
 		
 		for (int i = 0; i < dataLen; i++) {
-			toReturn[i + HEADER_SIZE] = dataField[i];
+			returnedStatusPacket[i + HEADER_SIZE] = dataField[i];
 		}
 		
-		return toReturn;
+		return returnedStatusPacket;
 	}
 	
 	public static int calculateChecksum(final byte[] data) {
