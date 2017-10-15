@@ -109,12 +109,12 @@ public class Client {
 		
 		byte[] sendHeader = synHeader.getBytes();
 		
-		final int attempts = 3;
+		final int ATTEMPTS = 10;
 		
 		DatagramPacket packet = null;
 		
 		// Waiting for SYN ACK
-		for (int i = 1; i <= attempts; i++) {
+		for (int i = 1; i <= ATTEMPTS; i++) {
 			
 			send(sendHeader);
 			
@@ -205,12 +205,12 @@ public class Client {
 		
 		System.out.println("Requesting file \"" + fileName + "\"");
 		
-		final int attempts = 3;
+		final int ATTEMPTS = 10;
 		
 		DatagramPacket reqAckPack = null;
 		
 		// Waiting for REQ ACK
-		for (int i = 1; i <= attempts; i++) {
+		for (int i = 1; i <= ATTEMPTS; i++) {
 			
 			send(packData);
 			
@@ -282,11 +282,11 @@ public class Client {
 		int bytesReceived = 0;
 		
 		int attempted = 0;
-		final int attempts = 3;
+		final int ATTEMPTS = 10;
 		
-		final String path = "./" + fileName;
+		final String PATH = "./" + fileName;
 		
-		File file = new File(path);
+		File file = new File(PATH);
 		
 		if (file.exists()) {
 			file.delete();
@@ -294,7 +294,7 @@ public class Client {
 		
 		file.createNewFile();
 		
-		FileOutputStream fos = new FileOutputStream(path, true);
+		FileOutputStream fos = new FileOutputStream(PATH, true);
 		
 		while (lastReceivedSeq != numPackets) {
 			int currentReceivedSeq = lastReceivedSeq;
@@ -354,7 +354,7 @@ public class Client {
 				attempted = 0;
 			}
 			
-			if (attempted >= attempts) {
+			if (attempted >= ATTEMPTS) {
 				System.err.println("Server not responding.");
 				return;
 			}
