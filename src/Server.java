@@ -292,7 +292,6 @@ public class Server {
 
                 // Populate packet byte array
                 for (int k = Header.HEADER_SIZE; k < packetSize; k++) {
-                    //packetData[k] = fileData[(x * maxData) + (k - Header.HEADER_SIZE)];
                     packetData[k] = fileData[(k - Header.HEADER_SIZE) + (tempPosition * MAX_DATA)];
                 }
                 tempPosition++;
