@@ -23,7 +23,10 @@ public class Server {
 
     private final String PATH = "files/";
 
-    private final int TIMEOUT = 4000;
+    /** Timeout in milliseconds */
+    private final int TIMEOUT = 2000;
+
+    private final int ATTEMPTS = 100;
 
     private String files = "";
 
@@ -37,7 +40,6 @@ public class Server {
 
     private String requestedFile;
 
-    private FileInputStream fis;
 
     /**
      * This will continuously prompt the user for a port number until valid.
@@ -251,7 +253,7 @@ public class Server {
         int lastAck = 0;
 
         int numRetry = 0;
-        final int attempts = 3;
+
 
         byte[] statusPacket = Header.createStatusPacket(true, numPackets,
                 (int) fileLength);
@@ -323,7 +325,7 @@ public class Server {
 
             } catch (SocketTimeoutException e) {
 
-                if (++numRetry > attempts) {
+                if (++numRetry > ATTEMPTS) {
                     System.err.println("Client not responding.");
                     return false;
                 }
@@ -371,10 +373,10 @@ public class Server {
 
         while (true) {
             establishConnection();
-            File file = new File(PATH + requestedFile);
+            File file;
             try {
-                fis = new FileInputStream(file);
-            } catch (IOException e) {
+                file = new File(PATH + requestedFile);
+            } catch (Exception e) {
                 byte[] status = Header.createStatusPacket(false, 0, 0);
                 send(status);
 

@@ -25,8 +25,9 @@ public class Client {
     /**
      * Timeout in milliseconds
      */
-    private final int TIMEOUT = 5000;
+    private final int TIMEOUT = 2000;
 
+    private final int ATTEMPTS = 100;
     private int clientPort;
 
     private int serverPort;
@@ -292,7 +293,6 @@ public class Client {
         int bytesReceived = 0;
 
         int attempted = 0;
-        final int ATTEMPTS = 10;
 
         final String PATH = "./" + fileName;
 

@@ -28,7 +28,7 @@ public class Header {
      * @param seqNum The sequence number
      */
     public void setSequenceNum(int seqNum) {
-        byte[] converted = intToByteArr(4, seqNum);
+        byte[] converted = intToByteArray(4, seqNum);
 
         for (int i = 0; i < converted.length; i++) {
             data[i] = converted[i];
@@ -168,7 +168,7 @@ public class Header {
      * @param toConvert The int to convert
      * @return The converted int into a byte array
      */
-    private byte[] intToByteArr(int numBytes, int toConvert) {
+    private byte[] intToByteArray(int numBytes, int toConvert) {
         byte[] data = new byte[numBytes];
 
         for (int i = numBytes - 1, offset = 0; i >= 0; i--, offset += 8) {
@@ -198,8 +198,8 @@ public class Header {
         dataField[0] = (byte) ((good ? 1 : 0) << 7);
 
         if (good) {
-            byte[] convertedPack = head.intToByteArr(4, numPackets);
-            byte[] convertedByte = head.intToByteArr(4, numBytes);
+            byte[] convertedPack = head.intToByteArray(4, numPackets);
+            byte[] convertedByte = head.intToByteArray(4, numBytes);
 
             System.arraycopy(convertedPack, 0, dataField, 1, 4);
             System.arraycopy(convertedByte, 0, dataField, 5, 4);
